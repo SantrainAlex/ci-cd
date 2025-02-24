@@ -1,0 +1,15 @@
+name: Issue Trigger
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  issue-opened:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Répondre à l'issue
+        run: echo "issue créée"

@@ -1,0 +1,14 @@
+name: Workflow Sequence
+
+on:
+  workflow_run:
+    workflows: ["Merge PR"]
+    types:
+      - completed
+
+jobs:
+  after-pr-merged:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Message de séquence
+        run: echo "Le workflow Merge PR est terminé !"
