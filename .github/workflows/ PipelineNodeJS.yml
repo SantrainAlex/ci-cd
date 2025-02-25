@@ -3,8 +3,6 @@ name: Node.js CI/CD Pipeline
 on:
   push:
     branches: 
-      - main
-      - develop
       - 'features/**'
       - 'hotfix/**'
 
@@ -82,13 +80,3 @@ jobs:
       
     - name: Build
       run: npm run build --if-present
-
-  # Protection des branches main et develop
-  protect-branches:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    steps:
-    - name: Branch Protection Check
-      run: |
-        echo "Les push directs sur les branches main et develop ne sont pas autorisés. Veuillez utiliser une Pull Request."
-        exit 1
