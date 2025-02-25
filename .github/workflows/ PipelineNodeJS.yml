@@ -86,12 +86,9 @@ jobs:
   # Protection des branches main et develop
   protect-branches:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     steps:
-    - uses: actions/checkout@v3
-    
     - name: Branch Protection Check
       run: |
-        if [[ ("${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/develop") && "${{ github.event_name }}" == "push" ]]; then
-          echo "Les push directs sur les branches main et develop ne sont pas autorisés. Veuillez utiliser une Pull Request."
-          exit 1
-        fi
+        echo "Les push directs sur les branches main et develop ne sont pas autorisés. Veuillez utiliser une Pull Request."
+        exit 1
