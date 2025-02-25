@@ -1,4 +1,9 @@
-name: Création Automatique de Branche Feature
+name: Créer une branche feature
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
 
 on:
   issues:
@@ -7,8 +12,9 @@ on:
 jobs:
   create-feature-branch:
     runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'feature')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: develop
           fetch-depth: 0
@@ -16,29 +22,24 @@ jobs:
       - name: Extraire les informations de l'issue
         id: issue
         run: |
-          # Nettoyer le titre de l'issue pour créer un nom de branche valide
-          CLEAN_TITLE=$(echo "${{ github.event.issue.title }}" | \
-            iconv -f utf8 -t ascii//TRANSLIT | \
-            sed -E 's/[^a-zA-Z0-9]+/-/g' | \
-            sed -E 's/^-+|-+$//g' | \
-            tr '[:upper:]' '[:lower:]')
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ASSIGNEE="${{ github.event.issue.assignee.login }}"
           
-          echo "branch_name=feature/${CLEAN_TITLE}" >> $GITHUB_OUTPUT
-          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          echo "assignee=${{ github.event.issue.assignee.login }}" >> $GITHUB_OUTPUT
+          # Nettoyer le titre pour créer un nom de branche valide
+          CLEAN_TITLE=$(echo "$ISSUE_TITLE" | iconv -t ascii//TRANSLIT | sed -r 's/[~^]+//g' | sed -r 's/[^a-zA-Z0-9]+/-/g' | sed -r 's/^-+|-+$//g' | tr A-Z a-z)
+          
+          # Créer le nom de la branche
+          BRANCH_NAME="feature/${ISSUE_NUMBER}-${CLEAN_TITLE}"
+          
+          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "assignee=$ASSIGNEE" >> $GITHUB_OUTPUT
 
       - name: Créer la branche feature
         run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions@github.com'
-          
-          # S'assurer d'être sur develop et à jour
-          git checkout develop
-          git pull origin develop
-          
-          # Créer et pousser la nouvelle branche
-          git checkout -b ${{ steps.issue.outputs.branch_name }}
-          git push origin ${{ steps.issue.outputs.branch_name }}
+          git checkout -b "${{ steps.issue.outputs.branch_name }}"
+          git push origin "${{ steps.issue.outputs.branch_name }}"
 
       - name: Commenter l'issue
         uses: actions/github-script@v6
@@ -47,12 +48,9 @@ jobs:
             const branchName = '${{ steps.issue.outputs.branch_name }}';
             const assignee = '${{ steps.issue.outputs.assignee }}';
             
-            const comment = `🎉 Branche créée avec succès !
+            const comment = `✨ Branche feature créée : \`${branchName}\`
             
-            @${assignee}, une nouvelle branche a été créée pour cette issue :
-            \`${branchName}\`
-            
-            Cette branche a été créée à partir de \`develop\`. Vous pouvez commencer à travailler dessus.
+            @${assignee}, vous pouvez maintenant commencer à travailler sur cette fonctionnalité.
             
             Pour commencer :
             \`\`\`bash
@@ -60,16 +58,18 @@ jobs:
             git checkout ${branchName}
             \`\`\`
             
-            N'oubliez pas de :
-            1. Faire des commits réguliers
-            2. Suivre les conventions de commit
-            3. Créer une Pull Request vers \`develop\` une fois terminé
-            `;
+            Une fois que vous avez terminé :
+            1. Poussez vos modifications
+            2. Créez une Pull Request vers \`develop\`
+            3. Attendez la validation des tests
+            4. Demandez une review
+            
+            Bonne chance ! 🚀`;
             
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.issue.outputs.issue_number }},
+              issue_number: context.issue.number,
               body: comment
             });
 
@@ -80,6 +80,6 @@ jobs:
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.issue.outputs.issue_number }},
-              labels: ['in-progress']
+              issue_number: context.issue.number,
+              labels: ['en-cours']
             });

@@ -1,5 +1,10 @@
 name: Suppression Automatique des Branches
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 on:
   pull_request:
     types: [closed]

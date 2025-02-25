@@ -1,5 +1,12 @@
 name: PR Test Pipeline
 
+# Définition des permissions globales pour le workflow
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  issues: write
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]

@@ -1,5 +1,10 @@
 name: Node.js CI/CD Pipeline
 
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
 on:
   push:
     branches: 
@@ -7,6 +12,10 @@ on:
       - develop
       - 'features/**'
       - 'hotfix/**'
+  pull_request:
+    branches:
+      - develop
+      - main
 
 jobs:
   conventional-commits-check:
