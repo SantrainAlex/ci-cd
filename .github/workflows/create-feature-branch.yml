@@ -1,0 +1,88 @@
+name: Création Automatique de Branche Feature
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  create-feature-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraire les informations de l'issue
+        id: issue
+        run: |
+          # Nettoyer le titre de l'issue pour créer un nom de branche valide
+          CLEAN_TITLE=$(echo "${{ github.event.issue.title }}" | \
+            iconv -f utf8 -t ascii//TRANSLIT | \
+            sed -E 's/[^a-zA-Z0-9]+/-/g' | \
+            sed -E 's/^-+|-+$//g' | \
+            tr '[:upper:]' '[:lower:]')
+          
+          echo "branch_name=feature/${CLEAN_TITLE}" >> $GITHUB_OUTPUT
+          echo "issue_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "assignee=${{ github.event.issue.assignee.login }}" >> $GITHUB_OUTPUT
+
+      - name: Créer la branche feature
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          
+          # S'assurer d'être sur develop et à jour
+          git checkout develop
+          git pull origin develop
+          
+          # Créer et pousser la nouvelle branche
+          git checkout -b ${{ steps.issue.outputs.branch_name }}
+          git push origin ${{ steps.issue.outputs.branch_name }}
+
+      - name: Commenter l'issue
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = '${{ steps.issue.outputs.branch_name }}';
+            const assignee = '${{ steps.issue.outputs.assignee }}';
+            
+            const comment = `🎉 Branche créée avec succès !
+            
+            @${assignee}, une nouvelle branche a été créée pour cette issue :
+            \`${branchName}\`
+            
+            Cette branche a été créée à partir de \`develop\`. Vous pouvez commencer à travailler dessus.
+            
+            Pour commencer :
+            \`\`\`bash
+            git fetch origin
+            git checkout ${branchName}
+            \`\`\`
+            
+            N'oubliez pas de :
+            1. Faire des commits réguliers
+            2. Suivre les conventions de commit
+            3. Créer une Pull Request vers \`develop\` une fois terminé
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.issue.outputs.issue_number }},
+              body: comment
+            });
+
+      - name: Ajouter un label à l'issue
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.issue.outputs.issue_number }},
+              labels: ['in-progress']
+            });

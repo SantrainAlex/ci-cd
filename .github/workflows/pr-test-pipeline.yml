@@ -1,0 +1,134 @@
+name: PR Test Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'feature/')
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+      fail-fast: false
+
+    name: Test Node ${{ matrix.node-version }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run integration tests
+        run: npm run test:integration
+        if: success()
+
+      - name: Generate test coverage report
+        run: |
+          npm run test:coverage
+          # Extraire le numéro de version sans le .x
+          VERSION=$(echo "${{ matrix.node-version }}" | sed 's/\.x//')
+          # Créer un rapport texte à partir de la couverture
+          echo "Rapport de couverture de tests - Node.js $VERSION" > coverage_Node$VERSION.txt
+          echo "Date de génération: $(date)" >> coverage_Node$VERSION.txt
+          echo "----------------------------------------" >> coverage_Node$VERSION.txt
+          
+          # Si lcov-report existe, utiliser celui-ci
+          if [ -f "coverage/lcov-report/index.html" ]; then
+            # Extraire les statistiques du rapport HTML
+            STATS=$(grep -A 4 "<div class='fl pad1y space-right2'>" coverage/lcov-report/index.html | grep -o "[0-9]\+\.[0-9]\+%")
+            echo "Statistiques de couverture:" >> coverage_Node$VERSION.txt
+            echo "Statements: $(echo "$STATS" | sed -n '1p')" >> coverage_Node$VERSION.txt
+            echo "Branches: $(echo "$STATS" | sed -n '2p')" >> coverage_Node$VERSION.txt
+            echo "Functions: $(echo "$STATS" | sed -n '3p')" >> coverage_Node$VERSION.txt
+            echo "Lines: $(echo "$STATS" | sed -n '4p')" >> coverage_Node$VERSION.txt
+          else
+            # Fallback sur le rapport JSON si disponible
+            if [ -f "coverage/coverage-final.json" ]; then
+              echo "Données brutes de couverture:" >> coverage_Node$VERSION.txt
+              cat coverage/coverage-final.json >> coverage_Node$VERSION.txt
+            fi
+          fi
+        if: success()
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v3
+        if: success()
+        with:
+          name: coverage_Node${{ matrix.node-version }}
+          path: coverage_Node*.txt
+          retention-days: 14
+
+  report-results:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always() && startsWith(github.head_ref, 'feature/')
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v3
+        if: success()
+
+      - name: Comment PR with test results
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const workflow_url = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            
+            let status = '';
+            if ('${{ needs.test.result }}' === 'success') {
+              status = '✅ Tous les tests ont réussi sur Node.js 18 et 20';
+            } else if ('${{ needs.test.result }}' === 'failure') {
+              status = '❌ Certains tests ont échoué';
+            } else {
+              status = '⚠️ Statut des tests : ${{ needs.test.result }}';
+            }
+            
+            // Lecture des rapports de couverture
+            let coverageInfo = '\n\n### Rapports de couverture\n';
+            try {
+              const files = fs.readdirSync('.');
+              const coverageFiles = files.filter(f => f.startsWith('coverage_Node'));
+              for (const file of coverageFiles) {
+                const content = fs.readFileSync(file, 'utf8');
+                const version = file.match(/Node(\d+)/)[1];
+                coverageInfo += `\n<details><summary>Node.js ${version}</summary>\n\n\`\`\`\n${content}\n\`\`\`\n</details>\n`;
+              }
+            } catch (error) {
+              coverageInfo = '\n\n❌ Erreur lors de la lecture des rapports de couverture';
+            }
+            
+            const comment = `## Résultats des Tests
+            ${status}
+            
+            [Voir les détails des tests](${workflow_url})
+            ${coverageInfo}
+            
+            > Cette PR a été testée car elle provient d'une branche feature/* vers develop.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
