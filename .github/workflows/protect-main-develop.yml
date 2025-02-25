@@ -1,0 +1,17 @@
+name: Protection Main et Develop
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  prevent-direct-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bloquer les push directs
+        run: |
+          echo "❌ Les push directs sur les branches main et develop ne sont pas autorisés."
+          echo "✨ Veuillez créer une Pull Request depuis votre branche feature/ ou hotfix/"
+          exit 1
