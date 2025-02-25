@@ -20,7 +20,7 @@ on:
 jobs:
   conventional-commits-check:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/heads/features/') || startsWith(github.ref, 'refs/heads/hotfix/')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/features/') || startsWith(github.ref, 'refs/heads/hotfix/')))
     steps:
       - uses: actions/checkout@v3
         with:
@@ -29,6 +29,34 @@ jobs:
       - name: Validate Conventional Commits
         uses: webiny/action-conventional-commits@v1.1.0
         with:
+          commitTypes: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          commitScopes: ""
+
+  validate-commit:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit message
+        uses: wagoid/commitlint-github-action@v5
+        with:
+          configFile: .commitlintrc.js
+          helpURL: https://github.com/conventional-changelog/commitlint/#what-is-commitlint
           commitTypes: |
             feat
             fix

@@ -1,7 +1,15 @@
 name: Protection Main et Develop
 
+permissions:
+  contents: write
+  pull-requests: write
+
 on:
   push:
+    branches:
+      - main
+      - develop
+  pull_request:
     branches:
       - main
       - develop
@@ -9,9 +17,23 @@ on:
 jobs:
   prevent-direct-push:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && !contains(github.actor, 'github-actions[bot]')
     steps:
       - name: Bloquer les push directs
         run: |
           echo "❌ Les push directs sur les branches main et develop ne sont pas autorisés."
           echo "✨ Veuillez créer une Pull Request depuis votre branche feature/ ou hotfix/"
           exit 1
+
+  validate-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Vérifier la branche source
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          if [[ ! "$SOURCE_BRANCH" =~ ^(feature|hotfix)/ ]]; then
+            echo "❌ La branche source doit commencer par 'feature/' ou 'hotfix/'"
+            exit 1
+          fi
+          echo "✅ La branche source est valide : $SOURCE_BRANCH"

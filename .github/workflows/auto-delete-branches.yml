@@ -44,99 +44,63 @@ jobs:
           PROTECTED_BRANCHES=("main" "develop" "master" "production" "staging")
           
           BRANCH="${{ steps.branch-info.outputs.branch_name }}"
+          IS_SAFE=true
           
           # Vérifier si la branche est dans la liste des branches protégées
           for protected in "${PROTECTED_BRANCHES[@]}"; do
             if [[ "$BRANCH" == "$protected" ]]; then
-              echo "❌ ERREUR: Tentative de suppression d'une branche protégée ($BRANCH)"
-              echo "is_safe=false" >> $GITHUB_OUTPUT
-              exit 0
+              echo " ERREUR: Tentative de suppression d'une branche protégée ($BRANCH)"
+              IS_SAFE=false
+              break
             fi
           done
           
           # Vérifier le format de la branche
-          if [[ "${{ steps.branch-info.outputs.branch_type }}" == "feature" && ! "$BRANCH" =~ ^feature/ ]]; then
-            echo "❌ ERREUR: Format de branche feature invalide"
-            echo "is_safe=false" >> $GITHUB_OUTPUT
-            exit 0
-          elif [[ "${{ steps.branch-info.outputs.branch_type }}" == "hotfix" && ! "$BRANCH" =~ ^hotfix/ ]]; then
-            echo "❌ ERREUR: Format de branche hotfix invalide"
-            echo "is_safe=false" >> $GITHUB_OUTPUT
-            exit 0
+          if [[ ! "$BRANCH" =~ ^(feature|hotfix)/ ]]; then
+            echo " ERREUR: Format de branche invalide ($BRANCH)"
+            IS_SAFE=false
           fi
           
-          echo "is_safe=true" >> $GITHUB_OUTPUT
+          if [[ "$IS_SAFE" == "true" ]]; then
+            echo " Vérifications de sécurité réussies pour la branche $BRANCH"
+          fi
+          
+          echo "is_safe=$IS_SAFE" >> $GITHUB_OUTPUT
 
       - name: Supprimer la branche
         if: |
           steps.branch-info.outputs.can_delete == 'true' && 
           steps.security-check.outputs.is_safe == 'true' && 
           github.event.pull_request.merged == true
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const branch = '${{ steps.branch-info.outputs.branch_name }}';
-            const branchType = '${{ steps.branch-info.outputs.branch_type }}';
-            const baseRef = '${{ github.base_ref }}';
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.branch-info.outputs.branch_name }}"
+          BRANCH_TYPE="${{ steps.branch-info.outputs.branch_type }}"
+          
+          # Supprimer la branche
+          gh api \
+            --method DELETE \
+            /repos/${{ github.repository }}/git/refs/heads/$BRANCH
+          
+          echo " Branche $BRANCH supprimée avec succès"
+          
+          # Commenter sur l'issue associée
+          if [[ "$BRANCH" =~ ^(feature|hotfix)/([0-9]+) ]]; then
+            ISSUE_NUMBER="${BASH_REMATCH[2]}"
             
-            try {
-              // Supprimer la branche
-              await github.rest.git.deleteRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: `heads/${branch}`
-              });
-              
-              // Ajouter un commentaire sur la PR
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `✅ Branche \`${branch}\` supprimée automatiquement après fusion dans \`${baseRef}\`
-                
-                Type: ${branchType}
-                Base: ${baseRef}
-                
-                Cette suppression a été effectuée car :
-                - La Pull Request a été mergée avec succès
-                - La branche source était de type ${branchType}/
-                - La branche cible était ${baseRef}
-                - Toutes les vérifications de sécurité ont été passées`
-              });
-            } catch (error) {
-              console.error('Erreur lors de la suppression de la branche:', error);
-              
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `⚠️ Erreur lors de la suppression de la branche \`${branch}\`
-                
-                Erreur: ${error.message}
-                
-                Veuillez vérifier les logs de la pipeline ou supprimer la branche manuellement si nécessaire.`
-              });
-            }
+            EMOJI=""
+            if [[ "$BRANCH_TYPE" == "hotfix" ]]; then
+              EMOJI=""
+            fi
+            
+            gh issue comment "$ISSUE_NUMBER" --body "$EMOJI La branche $BRANCH a été supprimée automatiquement après la fusion de la PR."
+          fi
 
       - name: Notifier en cas d'erreur de sécurité
         if: |
           steps.branch-info.outputs.can_delete == 'true' && 
           steps.security-check.outputs.is_safe == 'false' && 
           github.event.pull_request.merged == true
-        uses: actions/github-script@v6
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `⚠️ La branche n'a pas été supprimée pour des raisons de sécurité.
-              
-              Branche: \`${{ steps.branch-info.outputs.branch_name }}\`
-              Type: ${{ steps.branch-info.outputs.branch_type }}
-              
-              Veuillez vérifier que :
-              1. La branche n'est pas une branche protégée
-              2. Le format de la branche est correct (feature/ ou hotfix/)
-              3. La branche cible est correcte (develop pour feature/, main pour hotfix/)`
-            });
+        run: |
+          echo " La branche n'a pas pu être supprimée en raison des vérifications de sécurité"
