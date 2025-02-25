@@ -1,11 +1,6 @@
 name: PR Test Pipeline
 
-# Définition des permissions globales pour le workflow
-permissions:
-  contents: read
-  pull-requests: write
-  checks: write
-  issues: write
+permissions: write-all
 
 on:
   pull_request:
@@ -136,7 +131,7 @@ jobs:
             
             > Cette PR a été testée car elle provient d'une branche feature/* vers develop.`;
             
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
