@@ -29,29 +29,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          # Tenter d'abord npm ci
-          if npm ci; then
-            echo "✅ Installation réussie avec npm ci"
-          else
-            echo "⚠️ npm ci a échoué, tentative avec npm install..."
-            # Si npm ci échoue, utiliser npm install et mettre à jour le lock file
-            npm install
-            
-            # Vérifier si des changements ont été apportés au package-lock.json
-            if git diff --name-only | grep -q "package-lock.json"; then
-              echo "📦 Le package-lock.json a été mis à jour"
-              
-              # Configurer git
-              git config --global user.name 'GitHub Actions Bot'
-              git config --global user.email 'actions@github.com'
-              
-              # Commit et push les changements du package-lock.json
-              git add package-lock.json
-              git commit -m "chore: mise à jour package-lock.json pour Node ${{ matrix.node-version }}"
-              git push origin HEAD:${{ github.head_ref }}
-            fi
-          fi
+        run: npm install
 
       - name: Run linter
         run: npm run lint
