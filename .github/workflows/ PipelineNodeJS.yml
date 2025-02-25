@@ -33,7 +33,6 @@ jobs:
             chore
             revert
           commitScopes: ""
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     runs-on: ubuntu-latest

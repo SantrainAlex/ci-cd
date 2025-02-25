@@ -12,7 +12,6 @@ jobs:
         with:
           ref: develop
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extraire les informations de l'issue
         id: issue
@@ -44,7 +43,6 @@ jobs:
       - name: Commenter l'issue
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const branchName = '${{ steps.issue.outputs.branch_name }}';
             const assignee = '${{ steps.issue.outputs.assignee }}';
@@ -78,7 +76,6 @@ jobs:
       - name: Ajouter un label à l'issue
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
